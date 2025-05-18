@@ -7,7 +7,7 @@ LOGGER: Logger = getLogger(__package__)
 DOMAIN = "wetter_alarm"
 ATTRIBUTION = "Data provided by wetteralarm.ch"
 
-"""Constant values for wetter-alarm integration."""
+"""Constant values for wetter_alarm integration."""
 ALARM_ID = "alarm_id"
 VALID_FROM = "valid_from"
 VALID_TO = "valid_to"
