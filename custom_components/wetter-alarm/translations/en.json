@@ -1,19 +1,24 @@
 {
-  "config": {
-    "create_entry": {
-      "default": "The Entities for your sensors have been created.\n Please use the frontend to give each of them the desired name."
+    "config": {
+        "step": {
+            "user": {
+                "description": "Please enter the Name and ID of the place you want to add and the language you want to use for the messages.",
+                "data": {
+                    "poi_name": "POI Name",
+                    "poi_id": "POI ID",
+                    "language": "Language"
+                }
+            }
+        }
     },
-    "error": {
-      "invalid_connection": "Could not find a place with the supplied ID"
-    },
-    "step": {
-      "user": {
-        "description": "Please enter the Name and ID of the place you want to add",
-        "data": {
-          "poi_name": "Name",
-          "poi_id": "ID"
+    "selector": {
+      "language": {
+        "options": {
+          "de": "German",
+          "fr": "French",
+          "it": "Italian",
+          "en": "English"
         }
       }
     }
-  }
 }

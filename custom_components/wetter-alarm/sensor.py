@@ -1,71 +1,116 @@
-"""Platform for sensor integration."""
+"""Sensor platform for wetter_alarm."""
+
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING
 
-from homeassistant.components.sensor import SensorDeviceClass
-from homeassistant.components.sensor import SensorEntity
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import callback
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+)
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 
-from .const import ALARM_ID
-from .const import DOMAIN
-from .const import HINT
-from .const import PRIORITY
-from .const import REGION
-from .const import SIGNATURE
-from .const import TITLE
-from .const import VALID_FROM
-from .const import VALID_TO
-from .wetter_alarm_client import WetterAlarmApiClient
+from custom_components.wetter_alarm.const import (
+    ALARM_ID,
+    CONFIG_DATA_LANGUAGE,
+    CONFIG_POIS,
+    DOMAIN,
+    HINT,
+    PRIORITY,
+    REGION,
+    SIGNATURE,
+    TITLE,
+    VALID_FROM,
+    VALID_TO,
+)
+
+from .coordinator import WetterAlarmCoordinator
+from .entity import WetterAlarmEntity
 
 _LOGGER = logging.getLogger(__name__)
-SCAN_INTERVAL = timedelta(seconds=60)
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from .data import WetterAlarmConfigEntry
+
+ENTITY_DESCRIPTIONS = (
+    SensorEntityDescription(
+        key="wetter_alarm",
+        name="Integration Sensor",
+        icon="mdi:format-quote-close",
+    ),
+)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: WetterAlarmConfigEntry,
     async_add_entities: AddEntitiesCallback,
-):
-    pois_from_config = config_entry.data["pois"]
+) -> None:
+    """Set up the sensor platform."""
+    pois_from_config = config_entry.data[CONFIG_POIS]
+    data_language = config_entry.data[CONFIG_DATA_LANGUAGE]
     all_sensors = []
     for poi_name, poi_id in pois_from_config:
         coordinator = WetterAlarmCoordinator(
-            hass=hass, logger=_LOGGER, poi_name=poi_name, poi_id=poi_id
+            hass=hass,
+            logger=_LOGGER,
+            poi_name=poi_name,
+            poi_id=poi_id,
+            data_language=data_language,
         )
+
         sensors = [
-            WetterAlarmIdSensor(coordinator, ALARM_ID),
-            WetterAlarmValidFromSensor(coordinator, VALID_FROM),
-            WetterAlarmValidToSensor(coordinator, VALID_TO),
-            WetterAlarmPrioritySensor(coordinator, PRIORITY),
-            WetterAlarmRegionSensor(coordinator, REGION),
-            WetterAlarmTitleSensor(coordinator, TITLE),
-            WetterAlarmHintSensor(coordinator, HINT),
-            WetterAlarmSignatureSensor(coordinator, SIGNATURE),
+            WetterAlarmIdSensor(
+                coordinator, SensorEntityDescription(key=ALARM_ID, name="Alarm ID")
+            ),
+            WetterAlarmValidFromSensor(
+                coordinator, SensorEntityDescription(key=VALID_FROM, name="Valid From")
+            ),
+            WetterAlarmValidToSensor(
+                coordinator, SensorEntityDescription(key=VALID_TO, name="Valid To")
+            ),
+            WetterAlarmPrioritySensor(
+                coordinator, SensorEntityDescription(key=PRIORITY, name="Priority")
+            ),
+            WetterAlarmRegionSensor(
+                coordinator, SensorEntityDescription(key=REGION, name="Region")
+            ),
+            WetterAlarmTitleSensor(
+                coordinator, SensorEntityDescription(key=TITLE, name="Title")
+            ),
+            WetterAlarmHintSensor(
+                coordinator, SensorEntityDescription(key=HINT, name="Hint")
+            ),
+            WetterAlarmSignatureSensor(
+                coordinator, SensorEntityDescription(key=SIGNATURE, name="Signature")
+            ),
         ]
+
         all_sensors.extend(sensors)
+
         await coordinator.async_config_entry_first_refresh()
+
     async_add_entities(all_sensors)
 
 
-class WetterAlarmBaseSensor(CoordinatorEntity, SensorEntity):
-    """base Wetter-Alarm Sensor, all sensors inherit from it"""
+class WetterAlarmBaseSensor(WetterAlarmEntity, SensorEntity):
+    """wetter_alarm Sensor class."""
 
-    def __init__(self, coordinator: WetterAlarmCoordinator, suffix: str):
-        SensorEntity.__init__(self)
-        CoordinatorEntity.__init__(self, coordinator)
+    def __init__(
+        self,
+        coordinator: WetterAlarmCoordinator,
+        entity_description: SensorEntityDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = entity_description
         self._name = coordinator.name
-        self._suffix = suffix
         self._poi_id = coordinator.get_poi_id
-        _LOGGER.debug(f"created Sensor of class {__class__} with uid {self.unique_id}")
+        self._suffix = entity_description.key
 
     _attr_has_entity_name: True
     _attr_should_poll: True
@@ -79,26 +124,26 @@ class WetterAlarmBaseSensor(CoordinatorEntity, SensorEntity):
         return f"{self._name} {self._suffix.replace('_', ' ').capitalize()}"
 
     @property
-    def device_info(self) -> DeviceInfo:
-        """Return the device info."""
-        info = DeviceInfo(
-            identifiers={(DOMAIN, str(self._poi_id))},
-            name=f"Point of Interest-{self._name}/{self._poi_id}",
-            default_manufacturer="Wetter-Alarm",
-            default_model="API",
-        )
-        return info
-
-    @property
     def unique_id(self) -> str | None:
         return f"Point of Interest - {self._poi_id} - {self._suffix}"
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        value = self.coordinator.data[self._suffix]
-        self._attr_native_value = value
-        self.async_write_ha_state()
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return the device info."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, str(self._poi_id))},
+            name=f"Point of Interest - {self._name} ({self._poi_id})",
+            manufacturer="Wetter-Alarm",
+            model="API",
+            entry_type=DeviceEntryType.SERVICE,
+            configuration_url="https://www.wetteralarm.ch/",
+        )
+
+    @property
+    def native_value(self):
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get(self.entity_description.key)
 
 
 class WetterAlarmIdSensor(WetterAlarmBaseSensor):
@@ -149,45 +194,3 @@ class WetterAlarmSignatureSensor(WetterAlarmBaseSensor):
     """Sensor for who issued the alarm"""
 
     _attr_icon = "mdi:signature-freehand"
-
-
-class WetterAlarmCoordinator(DataUpdateCoordinator):
-    """Custom Wetter-Alarm Coordinator"""
-
-    def __init__(
-        self, hass: HomeAssistant, logger: logging.Logger, poi_id: int, poi_name: str
-    ) -> None:
-        self._hass = hass
-        self._poi_id = poi_id
-        self._name = f"{poi_name}"
-        self._logger = logger
-
-        super().__init__(
-            hass=hass,
-            logger=logger,
-            name=self._name,
-            update_interval=SCAN_INTERVAL,
-        )
-
-    @property
-    def get_hass(self):
-        return self._hass
-
-    @property
-    def get_poi_id(self):
-        return self._poi_id
-
-    async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data from API endpoint.
-        This is the place to pre-process the data to lookup tables
-        so entities can quickly look up their data.
-        """
-
-        self.update_interval = SCAN_INTERVAL
-
-        async def fetch_all_values() -> dict[str, float]:
-            client = WetterAlarmApiClient(self._poi_id)
-            data = await client.search_for_alerts_async(hass=self._hass)
-            return data
-
-        return await fetch_all_values()

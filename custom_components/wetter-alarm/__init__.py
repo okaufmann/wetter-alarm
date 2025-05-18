@@ -1,42 +1,63 @@
-"""The Wetter-Alarm integration."""
+"""
+Custom integration to integrate wetter_alarm with Home Assistant.
+
+For more details about this integration, please refer to
+https://github.com/redlukas/wetter-alarm
+"""
+
 from __future__ import annotations
 
-import logging
+from typing import TYPE_CHECKING
+from venv import logger
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.loader import async_get_loaded_integration
 
-from .const import DOMAIN
-from .wetter_alarm_client import WetterAlarmApiClient
+from .api import WetterAlarmApiClient
+from .data import WetterAlarmData
 
-_LOGGER = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+    from .data import WetterAlarmConfigEntry
+
+PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+]
 
 
-async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
-    """Set up Emu M-Bus Center from a config entry."""
+# https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: WetterAlarmConfigEntry,
+) -> bool:
+    """Set up this integration using UI."""
+    logger.debug("Setting up entry %s", entry.entry_id)
+    logger.debug(entry.data)
 
-    hass.data.setdefault(DOMAIN, {})
+    entry.runtime_data = WetterAlarmData(
+        integration=async_get_loaded_integration(hass, entry.domain),
+    )
 
-    client = WetterAlarmApiClient(136788)
-
-    valid_connection = await client.validate_poi_id_async(hass=hass)
-
-    if not valid_connection:
-        return False
-
-    hass.data[DOMAIN][config_entry.entry_id] = client
-
-    await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
+    # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        hass.data[DOMAIN].pop(entry.entry_id)
+async def async_unload_entry(
+    hass: HomeAssistant,
+    entry: WetterAlarmConfigEntry,
+) -> bool:
+    """Handle removal of an entry."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
-    return unload_ok
+
+async def async_reload_entry(
+    hass: HomeAssistant,
+    entry: WetterAlarmConfigEntry,
+) -> None:
+    """Reload config entry."""
+    await async_unload_entry(hass, entry)
+    await async_setup_entry(hass, entry)
