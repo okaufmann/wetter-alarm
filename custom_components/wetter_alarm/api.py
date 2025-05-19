@@ -1,3 +1,5 @@
+"""API client for interacting with the WetterAlarm weather alert service."""
+
 from __future__ import annotations
 
 import json
@@ -22,18 +24,21 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-# api_base_url = "https://my.wetteralarm.ch"
-api_base_url = "https://sta.my.wetteralarm.ch"
+api_base_url = "https://my.wetteralarm.ch"
 alert_url = f"{api_base_url}/v7/alarms/meteo.json"
 
 
 class WetterAlarmApiClient:
-    def __init__(self, poi_id: int, data_language: str = "en"):
+    """Client for interacting with the WetterAlarm API."""
+
+    def __init__(self, poi_id: int, data_language: str = "en") -> None:
+        """Initialize the WetterAlarmApiClient with a POI ID and data language."""
         self.poi_id = poi_id
         self.poi_url = f"{api_base_url}/v7/pois/{poi_id}.json"
         self.data_language = data_language or "en"
 
     async def async_validate_poi_id(self) -> bool:
+        """Validate the POI ID by making a request to the WetterAlarm API."""
         try:
             res = await self._api_wrapper("get", self.poi_url)
             if res:
@@ -42,23 +47,25 @@ class WetterAlarmApiClient:
                 poi_id=str(self.poi_id),
                 msg=f"Poi {self.poi_id} did not return a valid response",
             )
-        except CannotConnect as er:
-            _LOGGER.error("error validating the poi id", er)
+        except CannotConnectError:
+            _LOGGER.exception("error validating the poi id")
             raise WetterAlarmApiError(
                 poi_id=str(self.poi_id),
                 msg=f"Poi {self.poi_id} did not return a valid response",
-            )
+            ) from None
 
-    async def async_get_poi_data(self):
+    async def async_get_poi_data(self) -> None:
+        """Fetch and log data for the current POI."""
         try:
             res = await self._api_wrapper("get", self.poi_url)
-            _LOGGER.error(f"got info for POI {res}")
+            _LOGGER.error("got info for POI %s", res)
         except json.decoder.JSONDecodeError:
-            _LOGGER.error(f"Poi {self.poi_id} did not return a valid JSON")
-        except (ValueError, KeyError) as e:
-            _LOGGER.exception("did not satisfy expectations: %s", self.poi_id, e)
+            _LOGGER.exception("Poi %s did not return a valid JSON", self.poi_id)
+        except (ValueError, KeyError):
+            _LOGGER.exception("did not satisfy expectations: %s", self.poi_id)
 
-    async def async_search_for_alerts(self):
+    async def async_search_for_alerts(self) -> dict | None:
+        """Search for weather alerts related to the current POI."""
         try:
             res = await self._api_wrapper("get", alert_url)
 
@@ -68,16 +75,17 @@ class WetterAlarmApiClient:
             for alarm in meteo_alarms:
                 if self.poi_id in alarm["poi_ids"]:
                     _LOGGER.debug(
-                        f"found alarm for {self.poi_id} in {self.data_language}"
+                        "found alarm for %s in %s", self.poi_id, self.data_language
                     )
                     return {
                         ALARM_ID: alarm["id"],
+                        # TODO(okaufmann): this is not correctly parsed as UTC! The Timezone is missing!  # noqa: E501, FIX002, TD003
                         VALID_FROM: datetime.strptime(
                             alarm["valid_from"], "%Y-%m-%dT%H:%M:%S.%fZ"
-                        ),
+                        ).replace(tzinfo=datetime.timezone.utc),
                         VALID_TO: datetime.strptime(
                             alarm["valid_to"], "%Y-%m-%dT%H:%M:%S.%fZ"
-                        ),
+                        ).replace(tzinfo=datetime.timezone.utc),
                         PRIORITY: alarm["priority"],
                         REGION: alarm["region"][self.data_language]["name"],
                         TITLE: alarm[self.data_language]["title"],
@@ -97,9 +105,9 @@ class WetterAlarmApiClient:
                 }
 
         except json.decoder.JSONDecodeError:
-            _LOGGER.error(f"Poi {self.poi_id} did not return a valid JSON")
-        except (ValueError, KeyError) as e:
-            _LOGGER.error("did not satisfy expectations:", self.poi_id, e)
+            _LOGGER.exception("Poi %s did not return a valid JSON", self.poi_id)
+        except (ValueError, KeyError):
+            _LOGGER.exception("did not satisfy expectations: %s", self.poi_id)
 
     async def _api_wrapper(
         self,
@@ -110,46 +118,62 @@ class WetterAlarmApiClient:
     ) -> Any:
         """Get information from the API."""
         try:
-            async with async_timeout.timeout(10):
-                async with aiohttp.ClientSession() as session:
-                    async with session.request(
-                        method=method,
-                        url=url,
-                        headers=headers,
-                        json=data,
-                    ) as response:
-                        return await response.json()
+            async with (
+                async_timeout.timeout(10),
+                aiohttp.ClientSession() as session,
+                session.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    json=data,
+                ) as response,
+            ):
+                return await response.json()
 
         except TimeoutError as exception:
-            raise CannotConnect(
-                f"Timeout error fetching information - {exception}"
-            ) from exception
+            message = "Timeout error fetching information"
+            raise CannotConnectError(message, exception) from exception
         except (aiohttp.ClientError, socket.gaierror) as exception:
-            raise CannotConnect(
-                f"Error fetching information - {exception}"
-            ) from exception
+            message = "Error fetching information"
+            raise CannotConnectError(message, exception) from exception
         except Exception as exception:
-            raise CannotConnect(
-                f"Something really wrong happened! - {exception}"
-            ) from exception
+            message = "Something really wrong happened!"
+            raise CannotConnectError(message, exception) from exception
 
 
-class CannotConnect(HomeAssistantError):
+class CannotConnectError(HomeAssistantError):
     """Error to indicate we cannot connect."""
 
+    def __init__(
+        self,
+        message: str = "Cannot connect",
+        original_exception: Exception | None = None,
+    ) -> None:
+        """Initialize CannotConnectError with an optional message and original exception."""  # noqa: E501
+        super().__init__(message)
+        self.message = message
+        self.original_exception = original_exception
 
-class InvalidAuth(HomeAssistantError):
+    def __str__(self) -> str:
+        """Return a string representation of the error."""
+        if self.original_exception:
+            return f"{self.message}: {self.original_exception}"
+        return self.message
+
+
+class InvalidAuthError(HomeAssistantError):
     """Error to indicate there is invalid auth."""
 
 
 class WetterAlarmApiError(HomeAssistantError):
-    """Generic API errors"""
+    """Generic API errors."""
 
     def __init__(self, poi_id: str, msg: str | None = None) -> None:
-        """sta: status code, msg: message"""
+        """sta: status code, msg: message."""
         Exception.__init__(self)
         self.poi_id = poi_id
         self.msg = msg
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """Return a string representation of the WetterAlarmApiError."""
         return f"<Wetteralarm API Error sta:{self.poi_id} message:{self.msg}>"

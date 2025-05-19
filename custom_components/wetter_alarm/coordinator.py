@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import (
@@ -17,6 +15,10 @@ from .api import (
 SCAN_INTERVAL = timedelta(seconds=60)
 
 if TYPE_CHECKING:
+    import logging
+
+    from homeassistant.core import HomeAssistant
+
     from .data import WetterAlarmConfigEntry
 
 
@@ -34,6 +36,17 @@ class WetterAlarmCoordinator(DataUpdateCoordinator):
         poi_name: str,
         data_language: str = "en",
     ) -> None:
+        """
+        Initialize the WetterAlarmCoordinator.
+
+        Args:
+            hass: HomeAssistant instance.
+            logger: Logger instance.
+            poi_id: Point of Interest ID.
+            poi_name: Name of the Point of Interest.
+            data_language: Language for data retrieval (default is "en").
+
+        """
         self._hass = hass
         self._poi_id = poi_id
         self._data_language = data_language
@@ -48,16 +61,19 @@ class WetterAlarmCoordinator(DataUpdateCoordinator):
         )
 
     @property
-    def get_hass(self):
+    def get_hass(self) -> HomeAssistant:
+        """Return the HomeAssistant instance."""
         return self._hass
 
     @property
-    def get_poi_id(self):
+    def get_poi_id(self) -> int:
+        """Return the POI (Point of Interest) ID."""
         return self._poi_id
 
     async def _async_update_data(self) -> Any:
         """
         Fetch data from API endpoint.
+
         This is the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
         """

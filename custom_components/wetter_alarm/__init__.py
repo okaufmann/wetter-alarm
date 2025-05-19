@@ -13,7 +13,6 @@ from venv import logger
 from homeassistant.const import Platform
 from homeassistant.loader import async_get_loaded_integration
 
-from .api import WetterAlarmApiClient
 from .data import WetterAlarmData
 
 if TYPE_CHECKING:
