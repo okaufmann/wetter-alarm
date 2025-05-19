@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any, ClassVar
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -10,9 +11,7 @@ from homeassistant.helpers import selector
 
 from custom_components.wetter_alarm.api import WetterAlarmApiError
 
-from . import WetterAlarmApiClient
-
-
+from .api import WetterAlarmApiClient
 from .const import (
     CONFIG_DATA_LANGUAGE,
     CONFIG_DATA_LANGUAGE_OPTIONS,
@@ -31,7 +30,7 @@ class WetterAlarmUserFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_CLOUD_POLL
-    _pois = {}
+    _pois: ClassVar[dict] = {}
 
     async def async_step_user(
         self,
@@ -91,9 +90,11 @@ class WetterAlarmUserFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             errors=_errors,
         )
 
-    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
         """Handle reconfiguration of the integration."""
-        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])  # type: ignore[attr-defined]
 
         if user_input is not None:
             try:

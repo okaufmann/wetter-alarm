@@ -106,6 +106,7 @@ class WetterAlarmBaseSensor(WetterAlarmEntity, SensorEntity):
         coordinator: WetterAlarmCoordinator,
         entity_description: SensorEntityDescription,
     ) -> None:
+        """Initialize a WetterAlarmBaseSensor with coordinator and entity description."""  # noqa: E501
         super().__init__(coordinator)
         self.entity_description = entity_description
         self._name = coordinator.name
@@ -117,14 +118,17 @@ class WetterAlarmBaseSensor(WetterAlarmEntity, SensorEntity):
 
     @property
     def name(self) -> str | None:
+        """Return the name of the sensor."""
         return f"{self._name} {self._suffix}"
 
     @property
     def friendly_name(self) -> str | None:
+        """Return the friendly name for this sensor."""
         return f"{self._name} {self._suffix.replace('_', ' ').capitalize()}"
 
     @property
     def unique_id(self) -> str | None:
+        """Return a unique ID for this sensor."""
         return f"Point of Interest - {self._poi_id} - {self._suffix}"
 
     @property
@@ -140,57 +144,58 @@ class WetterAlarmBaseSensor(WetterAlarmEntity, SensorEntity):
         )
 
     @property
-    def native_value(self):
+    def native_value(self) -> object:
+        """Return the native value of the sensor."""
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.get(self.entity_description.key)
 
 
 class WetterAlarmIdSensor(WetterAlarmBaseSensor):
-    """Sensor for the Alarm ID"""
+    """Sensor for the Alarm ID."""
 
     _attr_icon = "mdi:identifier"
 
 
 class WetterAlarmValidFromSensor(WetterAlarmBaseSensor):
-    """Sensor for when the alarm starts"""
+    """Sensor for when the alarm starts."""
 
     _attr_icon = "mdi:calendar-arrow-left"
     _attr_device_class = SensorDeviceClass.DATE
 
 
 class WetterAlarmValidToSensor(WetterAlarmBaseSensor):
-    """Sensor for when the alarm ends"""
+    """Sensor for when the alarm ends."""
 
     _attr_icon = "mdi:calendar-arrow-right"
     _attr_device_class = SensorDeviceClass.DATE
 
 
 class WetterAlarmPrioritySensor(WetterAlarmBaseSensor):
-    """Sensor for the Alarm priority"""
+    """Sensor for the Alarm priority."""
 
     _attr_icon = "mdi:chevron-triple-up"
 
 
 class WetterAlarmRegionSensor(WetterAlarmBaseSensor):
-    """Sensor for the region the alarm occurs in"""
+    """Sensor for the region the alarm occurs in."""
 
     _attr_icon = "mdi:map-marker-check-outline"
 
 
 class WetterAlarmTitleSensor(WetterAlarmBaseSensor):
-    """Sensor for the title of the Alarm"""
+    """Sensor for the title of the Alarm."""
 
     _attr_icon = "mdi:format-title"
 
 
 class WetterAlarmHintSensor(WetterAlarmBaseSensor):
-    """Sensor for the Alarm hint"""
+    """Sensor for the Alarm hint."""
 
     _attr_icon = "mdi:account-alert"
 
 
 class WetterAlarmSignatureSensor(WetterAlarmBaseSensor):
-    """Sensor for who issued the alarm"""
+    """Sensor for who issued the alarm."""
 
     _attr_icon = "mdi:signature-freehand"
